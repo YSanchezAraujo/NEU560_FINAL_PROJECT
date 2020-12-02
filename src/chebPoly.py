@@ -44,10 +44,10 @@ def composeMaps(x, origA, origB, destA, destB):
     assert minX >= origA
     return destA + ((destB - destA) / (origB - origA)) * (x - origA)
 
-def chebyshev(g, m, dMax, dMin, nPoints):
+def chebyshev(g, m, dMin, dMax, nPoints):
     """
     inputs:
-       g: the function to approximate
+       g: the function to appr    T = np.ones((len(data), m+1))oximate
        m: degree of polynomial
        dMax: max value of data ~ g()
        dMin: min value of data ~ g()
@@ -62,10 +62,11 @@ def chebyshev(g, m, dMax, dMin, nPoints):
     for k in range(1, m):
         # recursively add the rest
         T[:, k+1] = 2 * data * T[:, k] - T[:, k-1]
-    W = np.diagw(data_on_P)
-    S =  T.T @ W @ T
-    u = T.T @ W @ g(data)
-    return np.linalg.lstsq(S, u)
+    W = np.diag(w(data_on_P))
+    S = T.T @ W @ T # we really only need W @ T, but this will speed thigns up when m is large
+    u = T.T @ W @ g(data) # same here, the result would be the same if we only did W @ g(data)
+    c = np.linalg.lstsq(S, u)
+    return c[0], T
 
 def w(x):
     """
@@ -74,6 +75,6 @@ def w(x):
     returns:
         y: points in [-1, 1] weighted by a function 1/sqrt(1 - x^2)
     """
-    return 1 / np.sqrt(1 - x**2)
+    return 1 / (np.sqrt(1 - x**2) + np.finfo(float).eps)
 
     
