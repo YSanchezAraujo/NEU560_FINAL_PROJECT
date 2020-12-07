@@ -1,32 +1,3 @@
-import numpy as np
-import scipy.integrate as integrate
-
-"""
-ALGORITHM 10.6: (least-squares approximation using orthoogal polynomials)
-inputs: f(x) - a continuous founction f(x) on [a, b]
-        w(x) - a weight function (integrable on [a, b])
-        {psi_k(x)}_k=0^n - a set of n orthogonal functions on [a, b]
-
-outpus: coeffcients a_0, a_1, ... , a_n such that the squared error is minimized
-
-step 1. compute C_k, k = 0, 1, ... , n as:
-    for k = 0, 1, ... , n do
-        C_k = \int_a^b w(x) \psi_k^2(x) dx
-    end
-
-step 2. compute a_k, k = 0, 1, ... , n as:
-    for k = 0, 1, ... , n do
-        a_k = 1 / C_k \int_a^b w(x) f(x) \psi_k(x) dx
-    end
-
-
-Three-Term Recurrence Formula for Chebyshev Polynomials
-
-    T_0(x) = 1
-    T_1(x) = x
-    T_{n+1}(x) = 2x * T_n(x) - T_{n-1}(x) , n >= 1
-""";
-
 def composeMaps(x, origA, origB, destA, destB):
     """
     inputs:
@@ -63,10 +34,10 @@ def chebyshev(g, m, dMin, dMax, nPoints):
         # recursively add the rest
         T[:, k+1] = 2 * data * T[:, k] - T[:, k-1]
     W = np.diag(w(data_on_P))
-    S = T.T @ W @ T # we really only need W @ T, but this will speed thigns up when m is large
-    u = T.T @ W @ g(data) # same here, the result would be the same if we only did W @ g(data)
-    c = np.linalg.lstsq(S, u)
-    return c[0], T
+    S = T.T @ W @ T
+    u = T.T @ W @ g(data)
+    c = np.linalg.lstsq(S, u, rcond=None)
+    return c[0]
 
 def w(x):
     """
@@ -77,4 +48,37 @@ def w(x):
     """
     return 1 / (np.sqrt(1 - x**2) + np.finfo(float).eps)
 
-    
+
+def mle_poisson_approx(X, y, c_s, M_nc):
+    """
+    doc: todo
+    """
+    M = c_s[-1] * M_nc
+    M_inv = np.linalg.inv(M)
+    return 0.5 * M_inv @ X.T @ (y - c_s[1])
+
+def negLogLikPoisson(w, X, y):
+    f = np.exp(X @ w)
+    return -(y.T @ np.log(f) - np.sum(f))
+
+def fit_glm(X, y, dMin, dMax, nPoints, adapt, nAdapt):
+    """
+    doc: todo
+    """
+    m = 2 # 2 is order of poly
+    M_nc = X.T @ X # save time on this because it only needs to be computed once
+    if adapt:
+        dMins = np.linspace(dMin-3, dMin+3, nAdapt)
+        dMaxs = np.linspace(dMax-3, dMax+3, nAdapt)
+        vals = list(zip(dMins, dMaxs))
+        ll_grid = np.zeros(len(vals))
+        W = np.zeros((len(vals), X.shape[1]))
+        for k, j in enumerate(vals):
+            c_s = chebyshev(np.exp, m, j[0], j[1], nPoints)
+            w_est = mle_poisson_approx(X, y, c_s, M_nc)
+            ll_grid[k] = -negLogLikPoisson(w_est, X, y)
+            W[k, :] = w_est
+        best_widx = np.argmax(ll_grid)
+        return W[best_widx, :], ll_grid
+    c_s = chebyshev(np.exp, m, dMin, dMax, nPoints)
+    return mle_poisson_approx(X, y, c_s, M_nc)
